@@ -1,0 +1,12 @@
+# Commodities to track - start with All Wheat for MVP
+commodities:
+  - code: 107
+    name: "All Wheat"
+    enabled: true
+    unit_id: 1  # Metric Tons
+    
+# Future commodities to add
+# - code: 101
+#   name: "Wheat - HRW"  
+#   enabled: false
+#   unit_id: 1

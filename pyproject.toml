@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "esr-export-pace"
+version = "0.1.0"
+description = "Track US agricultural export pace using USDA ESR data"
+authors = ["Your Name <your.email@example.com>"]
+packages = [{include = "esr_pace", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+requests = "^2.31.0"
+pandas = "^2.0.0"
+pyyaml = "^6.0"
+python-dotenv = "^1.0.0"
+click = "^8.2.1"
+plotly = "^6.3.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+jupyter = "^1.0.0"
+black = "^25.1.0"
+flake8 = "^7.3.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -1,0 +1,13 @@
+# ETL execution schedule
+schedule:
+  # Run weekly after ESR publication (Thursdays 8:30 AM ET)
+  frequency: weekly
+  day_of_week: thursday
+  time: "14:00"  # 2 PM UTC = 9 AM ET
+  
+  # Freshness check frequency
+  freshness_check: daily
+  
+  # Historical backfill (run monthly to catch revisions)
+  backfill_frequency: monthly
+  backfill_years: 3

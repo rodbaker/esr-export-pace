@@ -1,0 +1,11 @@
+# Marketing year boundary overrides
+# Only use if API /datareleasedates differs from expected
+overrides:
+  wheat:  # All wheat commodities (101-107)
+    start_month: 6    # June
+    start_day: 1
+    end_month: 5      # May  
+    end_day: 31
+    
+# Default: use API-provided boundaries from /datareleasedates
+use_api_boundaries: true
