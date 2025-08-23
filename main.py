@@ -25,10 +25,11 @@ except ImportError:
 
 from src.esr_pace.etl import ESRETLPipeline
 from src.esr_pace.api_client import ESRAPIError
+from src.esr_pace.config import config_manager
 
 
-# All Wheat commodity code
-ALL_WHEAT_COMMODITY_CODE = 107
+# Default commodity code (All Wheat for backward compatibility)
+DEFAULT_COMMODITY_CODE = 107
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -52,7 +53,20 @@ def setup_logging(verbose: bool = False) -> None:
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="ESR Export Pace Tracker - Fetch and process All Wheat export data"
+        description="ESR Export Pace Tracker - Fetch and process wheat export data"
+    )
+    
+    parser.add_argument(
+        '--commodity-code', '-c',
+        type=int,
+        default=DEFAULT_COMMODITY_CODE,
+        help=f'Commodity code to process (default: {DEFAULT_COMMODITY_CODE})'
+    )
+    
+    parser.add_argument(
+        '--list-commodities',
+        action='store_true',
+        help='List available commodities and exit'
     )
     
     parser.add_argument(
@@ -64,8 +78,7 @@ def main():
     parser.add_argument(
         '--output',
         type=str,
-        default='data/all_wheat_exports.csv',
-        help='Output CSV file path (default: data/all_wheat_exports.csv)'
+        help='Output CSV file path (default: data/commodity_{code}_exports.csv)'
     )
     
     parser.add_argument(
@@ -92,8 +105,38 @@ def main():
     setup_logging(args.verbose)
     logger = logging.getLogger(__name__)
     
+    # Handle list commodities command
+    if args.list_commodities:
+        logger.info("Available commodities:")
+        try:
+            enabled_commodities = config_manager.get_enabled_commodities()
+            for commodity in enabled_commodities:
+                status = "✅" if commodity.enabled else "❌"
+                desc = f" - {commodity.description}" if commodity.description else ""
+                logger.info(f"  {status} {commodity.code}: {commodity.name}{desc}")
+        except Exception as e:
+            logger.error(f"Failed to load commodities configuration: {e}")
+            return 1
+        return 0
+    
+    # Validate commodity code
+    commodity_code = args.commodity_code
+    commodity_config = config_manager.get_commodity_by_code(commodity_code)
+    if not commodity_config:
+        logger.error(f"Unknown commodity code: {commodity_code}")
+        logger.info("Use --list-commodities to see available options")
+        return 1
+    
+    if not commodity_config.enabled:
+        logger.error(f"Commodity {commodity_code} ({commodity_config.name}) is disabled")
+        return 1
+    
+    # Set default output path if not specified
+    if not args.output:
+        args.output = f"data/commodity_{commodity_code}_exports.csv"
+    
     logger.info("=== ESR Export Pace Tracker Started ===")
-    logger.info(f"Target commodity: {ALL_WHEAT_COMMODITY_CODE} (All Wheat)")
+    logger.info(f"Target commodity: {commodity_code} ({commodity_config.name})")
     logger.info(f"Output path: {args.output}")
     logger.info(f"Force refresh: {args.force_refresh}")
     
@@ -111,10 +154,10 @@ def main():
         logger.info("Initializing ETL pipeline...")
         pipeline = ESRETLPipeline(api_key=api_key)
         
-        # Run ETL for All Wheat
-        logger.info("Running ETL pipeline for All Wheat...")
+        # Run ETL for selected commodity
+        logger.info(f"Running ETL pipeline for {commodity_config.name}...")
         results = pipeline.run_etl(
-            commodity_code=ALL_WHEAT_COMMODITY_CODE,
+            commodity_code=commodity_code,
             force_refresh=args.force_refresh,
             validate_data=True
         )
@@ -145,7 +188,7 @@ def main():
         # Export to CSV
         logger.info(f"Exporting data to CSV: {args.output}")
         csv_path = pipeline.export_to_csv(
-            commodity_code=ALL_WHEAT_COMMODITY_CODE,
+            commodity_code=commodity_code,
             output_path=args.output
         )
         

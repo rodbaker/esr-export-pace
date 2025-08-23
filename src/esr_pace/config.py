@@ -14,6 +14,7 @@ class CommodityConfig:
     name: str
     enabled: bool
     unit_id: int
+    description: Optional[str] = None
 
 @dataclass
 class AppConfig:
@@ -72,6 +73,25 @@ class ConfigManager:
         """Get list of enabled commodities"""
         config = self.load_config()
         return [c for c in config.commodities if c.enabled]
+    
+    def get_commodity_by_code(self, code: int) -> Optional[CommodityConfig]:
+        """Get commodity configuration by code"""
+        config = self.load_config()
+        for commodity in config.commodities:
+            if commodity.code == code:
+                return commodity
+        return None
+    
+    def get_enabled_commodity_codes(self) -> List[int]:
+        """Get list of enabled commodity codes"""
+        return [c.code for c in self.get_enabled_commodities()]
+    
+    def get_commodity_name(self, code: int) -> str:
+        """Get commodity name by code, with fallback"""
+        commodity = self.get_commodity_by_code(code)
+        if commodity:
+            return commodity.name
+        return f"Commodity {code}"
 
 # Global config instance
 config_manager = ConfigManager()

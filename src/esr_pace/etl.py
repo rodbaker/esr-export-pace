@@ -394,6 +394,101 @@ class ESRETLPipeline:
         """
         return self.data_store.get_database_stats()
     
+    def run_batch_etl(self, commodity_codes: List[int], 
+                      force_refresh: bool = False,
+                      validate_data: bool = True,
+                      target_market_year: Optional[int] = None) -> Dict[str, Any]:
+        """Run ETL pipeline for multiple commodities in batch.
+        
+        Args:
+            commodity_codes: List of USDA commodity codes to process
+            force_refresh: Force refresh even if data is current
+            validate_data: Run data validation checks
+            target_market_year: Specific marketing year to fetch (None = current)
+            
+        Returns:
+            Dictionary with batch ETL results and statistics per commodity
+        """
+        start_time = datetime.now()
+        batch_results = {
+            'start_time': start_time.isoformat(),
+            'commodity_codes': commodity_codes,
+            'success': False,
+            'completed_commodities': 0,
+            'total_records_processed': 0,
+            'total_records_loaded': 0,
+            'commodity_results': {},
+            'summary': {
+                'successful': 0,
+                'failed': 0,
+                'skipped': 0,
+                'errors': []
+            }
+        }
+        
+        logger.info(f"Starting batch ETL pipeline for {len(commodity_codes)} commodities")
+        
+        try:
+            for commodity_code in commodity_codes:
+                logger.info(f"Processing commodity {commodity_code}")
+                
+                # Run individual ETL for this commodity
+                result = self.run_etl(
+                    commodity_code=commodity_code,
+                    force_refresh=force_refresh,
+                    validate_data=validate_data,
+                    target_market_year=target_market_year
+                )
+                
+                batch_results['commodity_results'][commodity_code] = result
+                batch_results['completed_commodities'] += 1
+                
+                if result['success']:
+                    if result.get('skipped'):
+                        batch_results['summary']['skipped'] += 1
+                    else:
+                        batch_results['summary']['successful'] += 1
+                        batch_results['total_records_processed'] += result.get('records_processed', 0)
+                        batch_results['total_records_loaded'] += result.get('records_loaded', 0)
+                else:
+                    batch_results['summary']['failed'] += 1
+                    error_msg = result.get('error', 'Unknown error')
+                    batch_results['summary']['errors'].append(f"Commodity {commodity_code}: {error_msg}")
+            
+            # Calculate overall success
+            end_time = datetime.now()
+            duration = (end_time - start_time).total_seconds()
+            
+            batch_results.update({
+                'success': batch_results['summary']['failed'] == 0,
+                'end_time': end_time.isoformat(),
+                'duration_seconds': duration
+            })
+            
+            logger.info(f"Batch ETL pipeline completed in {duration:.2f}s. "
+                       f"Processed {batch_results['completed_commodities']} commodities: "
+                       f"{batch_results['summary']['successful']} successful, "
+                       f"{batch_results['summary']['skipped']} skipped, "
+                       f"{batch_results['summary']['failed']} failed")
+            
+            return batch_results
+            
+        except Exception as e:
+            end_time = datetime.now()
+            duration = (end_time - start_time).total_seconds()
+            
+            error_msg = str(e)
+            batch_results.update({
+                'success': False,
+                'end_time': end_time.isoformat(),
+                'duration_seconds': duration,
+                'error': error_msg
+            })
+            
+            logger.error(f"Batch ETL pipeline failed after {duration:.2f}s: {error_msg}")
+            
+            return batch_results
+    
     def close(self):
         """Close connections and clean up resources."""
         if hasattr(self.api_client, 'close'):

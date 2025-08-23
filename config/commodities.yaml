@@ -1,12 +1,43 @@
-# Commodities to track - start with All Wheat for MVP
+# Wheat commodity classes to track
 commodities:
-  - code: 107
-    name: "All Wheat"
+  - code: 101
+    name: "Wheat - HRW"
+    description: "Hard Red Winter"
     enabled: true
     unit_id: 1  # Metric Tons
     
-# Future commodities to add
-# - code: 101
-#   name: "Wheat - HRW"  
-#   enabled: false
-#   unit_id: 1
+  - code: 102
+    name: "Wheat - SRW"
+    description: "Soft Red Winter" 
+    enabled: true
+    unit_id: 1  # Metric Tons
+    
+  - code: 103
+    name: "Wheat - HRS"
+    description: "Hard Red Spring"
+    enabled: true
+    unit_id: 1  # Metric Tons
+    
+  - code: 104
+    name: "Wheat - White"
+    description: "White Wheat"
+    enabled: true
+    unit_id: 1  # Metric Tons
+    
+  - code: 105
+    name: "Wheat - Durum"
+    description: "Durum Wheat"
+    enabled: true
+    unit_id: 1  # Metric Tons
+    
+  - code: 106
+    name: "Wheat - Mixed"
+    description: "Mixed Wheat"
+    enabled: true
+    unit_id: 1  # Metric Tons
+    
+  - code: 107
+    name: "All Wheat"
+    description: "All Wheat Classes Combined"
+    enabled: true
+    unit_id: 1  # Metric Tons

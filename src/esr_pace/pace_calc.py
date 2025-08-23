@@ -71,7 +71,7 @@ class PaceAnalyzer:
             raise FileNotFoundError(f"Database not found: {self.db_path}")
         
         # Analysis parameters
-        self.historical_years = 3  # Number of years for baseline
+        self.historical_years = 5  # Number of years for baseline (improved from 3 to 5)
         self.normal_deviation_threshold = 10.0  # ±10% is normal
         self.significant_deviation_threshold = 20.0  # ±20% is significant
         self.major_deviation_threshold = 30.0  # ±30% is major concern
@@ -205,7 +205,8 @@ class PaceAnalyzer:
             baseline = baseline.reset_index()
             
             # Add metadata
-            baseline['baseline_years'] = self.historical_years
+            baseline['baseline_years'] = actual_years  # Use actual years calculated, not the target
+            baseline['target_baseline_years'] = self.historical_years  # Store the target for reference
             baseline['start_market_year'] = start_market_year
             baseline['end_market_year'] = end_market_year - 1
             baseline['commodity_code'] = commodity_code
@@ -839,7 +840,7 @@ class PaceAnalyzer:
                 'analysis_date': datetime.now().isoformat(),
                 'weeks_analyzed': len(pace_metrics),
                 'baseline_years': self.historical_years,
-                'baseline_period': f"MY 2023-2025"  # Based on our data
+                'baseline_period': f"MY 2017-2026"  # Based on 10-year target data
             },
             'summary_statistics': {
                 'total_weeks': summary.total_weeks_analyzed,
@@ -919,11 +920,11 @@ class PaceAnalyzer:
         
         # Current pace trend insight
         if summary.current_pace_trend == "ahead":
-            insights.append(f"Current export pace is running ahead of the 3-year historical average by an average of {summary.avg_pace_deviation_pct:.1f}%")
+            insights.append(f"Current export pace is running ahead of the {self.historical_years}-year historical average by an average of {summary.avg_pace_deviation_pct:.1f}%")
         elif summary.current_pace_trend == "behind":
-            insights.append(f"Current export pace is running behind the 3-year historical average by an average of {abs(summary.avg_pace_deviation_pct):.1f}%")
+            insights.append(f"Current export pace is running behind the {self.historical_years}-year historical average by an average of {abs(summary.avg_pace_deviation_pct):.1f}%")
         else:
-            insights.append(f"Current export pace is tracking closely with the 3-year historical average (±{abs(summary.avg_pace_deviation_pct):.1f}%)")
+            insights.append(f"Current export pace is tracking closely with the {self.historical_years}-year historical average (±{abs(summary.avg_pace_deviation_pct):.1f}%)")
         
         # Volatility insight
         if summary.volatility_score > 1.0:
