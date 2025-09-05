@@ -14,6 +14,21 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 
 
+# Bendigo Color Theme
+BENDIGO_COLORS = {
+    'primary': '#870E40',      # Deep burgundy
+    'secondary': '#DE313B',    # Red
+    'accent1': '#DB3929',      # Red variant
+    'accent2': '#F37021',      # Orange
+    'accent3': '#F7966B',      # Light orange
+    'dark1': '#58003A',        # Dark burgundy
+    'dark2': '#330019',        # Very dark burgundy
+    'background': '#FFFFFF',   # White
+    'foreground': '#323D42',   # Dark gray
+    'light1': '#CBCCCC',       # Light gray
+    'light2': '#E2E7E9',       # Very light gray
+}
+
 logger = logging.getLogger(__name__)
 
 
@@ -494,7 +509,7 @@ class PaceAnalyzer:
                 x=dates, y=current_accumulated,
                 mode='lines+markers',
                 name='Current Year',
-                line=dict(color='#2E86C1', width=3),
+                line=dict(color=BENDIGO_COLORS['primary'], width=3),
                 marker=dict(size=6)
             ),
             row=1, col=1
@@ -505,7 +520,7 @@ class PaceAnalyzer:
                 x=dates, y=historical_accumulated,
                 mode='lines+markers',
                 name='3-Year Average',
-                line=dict(color='#E74C3C', width=2, dash='dash'),
+                line=dict(color=BENDIGO_COLORS['secondary'], width=2, dash='dash'),
                 marker=dict(size=5)
             ),
             row=1, col=1
@@ -534,7 +549,7 @@ class PaceAnalyzer:
                         mode='lines',
                         line=dict(width=0),
                         fill='tonexty',
-                        fillcolor='rgba(231, 76, 60, 0.2)',
+                        fillcolor='rgba(222, 49, 59, 0.2)',
                         name='95% Confidence Interval',
                         hoverinfo='skip'
                     ),
@@ -547,7 +562,7 @@ class PaceAnalyzer:
                 x=dates, y=pace_deviations,
                 mode='lines+markers',
                 name='Pace Deviation',
-                line=dict(color='#8E44AD', width=2),
+                line=dict(color=BENDIGO_COLORS['dark1'], width=2),
                 marker=dict(
                     size=8,
                     color=[self._get_deviation_color(d) for d in pace_deviations],
@@ -560,35 +575,35 @@ class PaceAnalyzer:
         # Add threshold lines
         fig.add_hline(
             y=self.normal_deviation_threshold, 
-            line_dash="dot", line_color="green",
+            line_dash="dot", line_color=BENDIGO_COLORS['accent2'],
             annotation_text="Normal (+10%)",
             row=2, col=1
         )
         fig.add_hline(
             y=-self.normal_deviation_threshold, 
-            line_dash="dot", line_color="green",
+            line_dash="dot", line_color=BENDIGO_COLORS['accent2'],
             row=2, col=1
         )
         fig.add_hline(
             y=self.significant_deviation_threshold, 
-            line_dash="dash", line_color="orange",
+            line_dash="dash", line_color=BENDIGO_COLORS['accent3'],
             annotation_text="Significant (+20%)",
             row=2, col=1
         )
         fig.add_hline(
             y=-self.significant_deviation_threshold, 
-            line_dash="dash", line_color="orange",
+            line_dash="dash", line_color=BENDIGO_COLORS['accent3'],
             row=2, col=1
         )
         fig.add_hline(
             y=self.major_deviation_threshold, 
-            line_dash="solid", line_color="red",
+            line_dash="solid", line_color=BENDIGO_COLORS['secondary'],
             annotation_text="Major (+30%)",
             row=2, col=1
         )
         fig.add_hline(
             y=-self.major_deviation_threshold, 
-            line_dash="solid", line_color="red",
+            line_dash="solid", line_color=BENDIGO_COLORS['secondary'],
             row=2, col=1
         )
         
@@ -600,7 +615,7 @@ class PaceAnalyzer:
             go.Bar(
                 x=dates, y=current_weekly,
                 name='Current Weekly',
-                marker=dict(color='rgba(46, 134, 193, 0.7)')
+                marker=dict(color='rgba(135, 14, 64, 0.7)')
             ),
             row=3, col=1
         )
@@ -610,7 +625,7 @@ class PaceAnalyzer:
                 x=dates, y=historical_weekly,
                 mode='lines+markers',
                 name='Historical Weekly Avg',
-                line=dict(color='#E74C3C', width=2),
+                line=dict(color=BENDIGO_COLORS['secondary'], width=2),
                 marker=dict(size=5)
             ),
             row=3, col=1
@@ -677,7 +692,7 @@ class PaceAnalyzer:
                 x=dates, y=pace_deviations,
                 mode='lines+markers',
                 name='Pace Deviation',
-                line=dict(color='#2C3E50', width=3),
+                line=dict(color=BENDIGO_COLORS['foreground'], width=3),
                 marker=dict(
                     size=10,
                     color=[self._get_deviation_color(d) for d in pace_deviations],
@@ -689,7 +704,7 @@ class PaceAnalyzer:
         )
         
         # Add zero line
-        fig.add_hline(y=0, line_dash="dot", line_color="gray", row=1, col=1)
+        fig.add_hline(y=0, line_dash="dot", line_color=BENDIGO_COLORS['light1'], row=1, col=1)
         
         # 2. Distribution histogram
         fig.add_trace(
@@ -698,7 +713,7 @@ class PaceAnalyzer:
                 nbinsx=15,
                 name='Deviation Distribution',
                 marker=dict(
-                    color='rgba(46, 134, 193, 0.7)',
+                    color='rgba(135, 14, 64, 0.7)',
                     line=dict(color='white', width=1)
                 )
             ),
@@ -719,9 +734,9 @@ class PaceAnalyzer:
                 y=heatmap_weeks,
                 x=['Weekly Deviation %'],
                 colorscale=[
-                    [0, '#E74C3C'],     # Red for negative
-                    [0.5, '#F8F9FA'],   # White for neutral
-                    [1, '#27AE60']      # Green for positive
+                    [0, BENDIGO_COLORS['secondary']],     # Red for negative
+                    [0.5, BENDIGO_COLORS['background']], # White for neutral  
+                    [1, BENDIGO_COLORS['accent2']]       # Orange for positive
                 ],
                 zmid=0,
                 showscale=True,
@@ -753,8 +768,8 @@ class PaceAnalyzer:
             xanchor='center', yanchor='middle',
             showarrow=False,
             font=dict(size=12),
-            bgcolor="rgba(248, 249, 250, 0.8)",
-            bordercolor="#BDC3C7",
+            bgcolor="rgba(226, 231, 233, 0.8)",
+            bordercolor=BENDIGO_COLORS['light1'],
             borderwidth=1,
             row=2, col=2
         )
@@ -789,7 +804,7 @@ class PaceAnalyzer:
         return fig
     
     def _get_deviation_color(self, deviation_pct: float) -> str:
-        """Get color based on deviation severity.
+        """Get color based on deviation severity using Bendigo theme.
         
         Args:
             deviation_pct: Pace deviation percentage
@@ -800,13 +815,13 @@ class PaceAnalyzer:
         severity = self.classify_deviation_severity(deviation_pct)
         
         if severity == "normal":
-            return "#27AE60"  # Green
+            return BENDIGO_COLORS['foreground']  # Dark gray for normal
         elif severity == "significant":
-            return "#F39C12"  # Orange
+            return BENDIGO_COLORS['accent2']     # Orange for significant
         elif severity == "major":
-            return "#E74C3C"  # Red
+            return BENDIGO_COLORS['secondary']   # Red for major
         else:  # critical
-            return "#8E44AD"  # Purple
+            return BENDIGO_COLORS['primary']     # Deep burgundy for critical
     
     def generate_pace_report(self, commodity_code: int, 
                            market_year: Optional[int] = None,
@@ -1266,7 +1281,7 @@ class PaceAnalyzer:
                 mode='lines',
                 line=dict(width=0),
                 fill='tonexty',
-                fillcolor='rgba(169, 169, 169, 0.3)',
+                fillcolor='rgba(203, 204, 204, 0.3)',
                 name=f'Historical High and Low Range ({min(historical_years)}-{max(historical_years)})',
                 hovertemplate='<b>Marketing Week %{x}</b><br>' +
                               'Historical Low Range: %{y:.2f}M MT<br>' +
@@ -1280,7 +1295,7 @@ class PaceAnalyzer:
                 x=historical_ranges['marketing_week_index'],
                 y=historical_ranges['mean_mt'],
                 mode='lines',
-                line=dict(color='#E74C3C', width=2, dash='dash'),
+                line=dict(color=BENDIGO_COLORS['secondary'], width=2, dash='dash'),
                 name=f'{len(historical_years)}-Year Average',
                 hovertemplate='<b>Marketing Week %{x}</b><br>' +
                               'Historical Average: %{y:.2f}M MT<br>' +
@@ -1294,8 +1309,8 @@ class PaceAnalyzer:
                 x=current_df['marketing_week_index'],
                 y=current_df['accumulated_mt'],
                 mode='lines+markers',
-                line=dict(color='#2E86C1', width=3),
-                marker=dict(size=6, color='#2E86C1'),
+                line=dict(color=BENDIGO_COLORS['primary'], width=3),
+                marker=dict(size=6, color=BENDIGO_COLORS['primary']),
                 name=f'MY {current_year} (Current)',
                 hovertemplate='<b>Week %{x} (%{customdata})</b><br>' +
                               'Current Accumulated: %{y:.2f}M MT<br>' +
@@ -1349,13 +1364,13 @@ class PaceAnalyzer:
                 # Determine position relative to range
                 if latest_current > hist_max:
                     position_text = f"Above historical range (+{((latest_current/hist_max - 1)*100):.1f}%)"
-                    position_color = "#E74C3C"
+                    position_color = BENDIGO_COLORS['secondary']
                 elif latest_current < hist_min:
                     position_text = f"Below historical range ({((latest_current/hist_min - 1)*100):.1f}%)"
-                    position_color = "#E74C3C"
+                    position_color = BENDIGO_COLORS['secondary']
                 else:
                     position_text = f"Within historical range ({((latest_current/hist_mean - 1)*100):+.1f}% vs avg)"
-                    position_color = "#27AE60"
+                    position_color = BENDIGO_COLORS['accent2']
                 
                 fig.add_annotation(
                     x=latest_week,
