@@ -6,13 +6,13 @@ authors = ["Your Name <your.email@example.com>"]
 packages = [{include = "esr_pace", from = "src"}]
 
 [tool.poetry.dependencies]
-python = "^3.10"
-requests = "^2.31.0"
-pandas = "^2.0.0"
-pyyaml = "^6.0"
-python-dotenv = "^1.0.0"
-click = "^8.2.1"
-plotly = "^6.3.0"
+python = ">=3.10,<3.13"
+requests = ">=2.31.0,<2.33.0"
+pandas = ">=2.0.0,<2.3.0"
+pyyaml = ">=6.0,<7.0"
+python-dotenv = ">=1.0.0,<2.0.0"
+click = ">=8.2.1,<9.0.0"
+plotly = ">=6.3.0,<7.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.0"

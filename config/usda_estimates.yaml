@@ -1,0 +1,19 @@
+# USDA Export Estimates (from WASDE reports)
+# Updated monthly when new WASDE is released
+# Values in Metric Tons (MT)
+
+estimates:
+  # All Wheat (commodity 107)
+  - commodity_code: 107
+    market_year: 2026
+    estimate_mt: 24494400  # 24.5 million MT (900 million bushels)
+    wasde_date: "2025-01-10"  # January 2025 WASDE
+    wasde_report: "January 2025"
+    notes: "WASDE estimate: 900 million bushels converted to MT"
+
+  # You can add individual wheat class estimates here if USDA provides them
+  # - commodity_code: 101
+  #   market_year: 2026
+  #   estimate_mt: 7000000
+  #   wasde_date: "2025-11-01"
+  #   wasde_report: "November 2025"

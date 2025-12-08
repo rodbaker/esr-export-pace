@@ -27,7 +27,12 @@ class ESRDataStore:
         self._ensure_schema()
     
     def _get_connection(self) -> sqlite3.Connection:
-        """Get database connection, creating if needed."""
+        """Get database connection, creating if needed.
+
+        TODO: Refactor to use context managers (with statements) for better
+        resource management and automatic connection cleanup. This persistent
+        connection pattern can lead to connection leaks. See ISSUES.md #2.
+        """
         if self.conn is None:
             self.conn = sqlite3.connect(str(self.db_path))
             self.conn.execute("PRAGMA foreign_keys = ON")

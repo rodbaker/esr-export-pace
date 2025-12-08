@@ -22,12 +22,12 @@ Shows current marketing year performance against extended historical high/low ra
 
 ### Multi-Commodity Analysis
 Comprehensive support for all wheat classes:
-- 101: Durum Wheat
-- 102: Hard Red Spring Wheat
-- 103: Hard Red Winter Wheat
-- 104: Soft Red Winter Wheat
-- 105: Hard White Wheat
-- 106: Soft White Wheat
+- 101: Hard Red Winter Wheat (HRW)
+- 102: Soft Red Winter Wheat (SRW)
+- 103: Hard Red Spring Wheat (HRS)
+- 104: White Wheat
+- 105: Durum Wheat
+- 106: Soft White Wheat (no data currently available)
 - 107: All Wheat (Aggregate)
 
 ### Pace Analysis Dashboard
@@ -68,17 +68,11 @@ python main.py --list-commodities
 # Run batch ETL for all wheat classes
 python batch_etl.py --force-refresh
 
-# Generate pace analysis for All Wheat
-python test_pace_analysis.py
-
-# Analyze specific wheat grade
-python analyze_wheat_grade.py 101  # Hard Red Winter
-
-# Compare performance across wheat grades
-python compare_wheat_grades.py
-
 # Get current export totals by grade
 python get_current_exports.py
+
+# Generate enhanced multi-commodity comparison dashboard
+python enhanced_wheat_comparison.py
 ```
 
 ### Enhanced Historical Data Collection

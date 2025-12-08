@@ -87,9 +87,10 @@ class PaceAnalyzer:
         
         # Analysis parameters
         self.historical_years = 5  # Number of years for baseline (improved from 3 to 5)
-        self.normal_deviation_threshold = 10.0  # ±10% is normal
-        self.significant_deviation_threshold = 20.0  # ±20% is significant
-        self.major_deviation_threshold = 30.0  # ±30% is major concern
+        # Performance thresholds aligned with domain expertise (.claude/agents/agricultural-domain-expert.md)
+        self.normal_deviation_threshold = 10.0  # ±10% is on pace (normal)
+        self.significant_deviation_threshold = 25.0  # ±10-25% is significant (changed from 20.0)
+        self.major_deviation_threshold = 40.0  # ±25-40% is major, >40% is critical (changed from 30.0)
         
         logger.info(f"PaceAnalyzer initialized with database: {self.db_path}")
     
@@ -519,7 +520,7 @@ class PaceAnalyzer:
             go.Scatter(
                 x=dates, y=historical_accumulated,
                 mode='lines+markers',
-                name='3-Year Average',
+                name='5-Year Average',
                 line=dict(color=BENDIGO_COLORS['secondary'], width=2, dash='dash'),
                 marker=dict(size=5)
             ),

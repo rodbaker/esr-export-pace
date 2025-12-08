@@ -57,14 +57,9 @@ class ESRAPIClient:
             'Accept': 'application/json',
             'Cache-Control': 'no-cache'
         }
-        
-        # Add API key to headers if provided
-        # Try different common API key header formats
-        if self.api_key:
-            headers['API_KEY'] = self.api_key
-            headers['X-API-Key'] = self.api_key
-            headers['Authorization'] = f'Bearer {self.api_key}'
-            
+
+        # NOTE: USDA ESR API requires authentication via query parameters, NOT headers
+        # API key is added to request params in fetch_esr_data() method
         self.session.headers.update(headers)
         
     def _should_retry(self, response: Optional[requests.Response], 

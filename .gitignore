@@ -48,9 +48,9 @@ data/
 output/*.csv
 output/*.json
 
-# Keep HTML charts but ignore large data exports
+# Ignore generated HTML dashboards (regenerate as needed)
 output/*.html
-!output/*.html
+output/**/*.html
 
 # Jupyter Notebook
 .ipynb_checkpoints

@@ -26,9 +26,9 @@ Complete USDA ESR (Export Sales Reporting) data pipeline with advanced pace anal
    - Severity classification and detailed reporting
 
 5. **Pace Analysis Engine** (`src/esr_pace/pace_calc.py`)
-   - 3-year historical baseline calculations
+   - 5-year historical baseline calculations (upgraded from 3-year in 2024)
    - Statistical deviation analysis with confidence intervals
-   - Interactive Plotly dashboards and visualizations
+   - Interactive Plotly dashboards with Bendigo color theme
    - Comprehensive reporting with insights and recommendations
 
 ## Key Features
@@ -36,7 +36,7 @@ Complete USDA ESR (Export Sales Reporting) data pipeline with advanced pace anal
 ### Data Processing
 - **Marketing Year Support**: June 1 - May 31 agricultural cycles
 - **World Aggregation**: Country-level data rolled up to world totals
-- **Historical Analysis**: 3+ years of baseline data for trend analysis
+- **Historical Analysis**: 5-year baseline data (2020-2024) for trend analysis
 - **Data Quality**: Comprehensive validation and cleaning pipeline
 
 ### Pace Analysis
@@ -59,17 +59,20 @@ Complete USDA ESR (Export Sales Reporting) data pipeline with advanced pace anal
 - **10-year historical coverage** (2017-2026) with **5-year statistical baselines**
 - **Complete multi-commodity analysis** with comparative performance rankings
 
-### Current Analysis Results
+### Current Analysis Results (Week 22, MY 2026)
 **All Wheat (MY 2026):**
-- Current pace: **+26.19%** ahead of 5-year average
-- **8/11 weeks** ahead of historical pace
-- **4.6M MT** cumulative exports with strong forward sales
+- Current pace: **+31.5%** ahead of 5-year average
+- Cumulative exports: **11.58M MT** (47.3% of USDA target)
+- Total commitments: **16.80M MT** (68.6% of target)
+- Outstanding sales: **5.23M MT** (forward pipeline)
+- USDA full season target: **24.49M MT**
 
 **Individual Wheat Grade Performance:**
-- **Durum Wheat**: +162.5% ahead (exceptional performance)
-- **Soft Red Winter**: +15.6% ahead (strong performance)
-- **Hard Red Winter**: -22.8% behind (underperforming)
-- **Complete dashboards** available for all wheat classes
+- **Hard Red Winter**: 4.64M MT (40.1% of total)
+- **Hard Red Spring**: 2.94M MT (25.4% of total)
+- **White Wheat**: 2.16M MT (18.6% of total)
+- **Soft Red Winter**: 1.64M MT (14.2% of total)
+- **Durum Wheat**: 0.19M MT (1.6% of total)
 
 ## Technical Solutions
 
@@ -93,9 +96,9 @@ Complete USDA ESR (Export Sales Reporting) data pipeline with advanced pace anal
 python main.py --commodity-code 107 --output output/wheat_exports.csv
 ```
 
-### Pace Analysis
+### Multi-Commodity Dashboard (Current)
 ```bash
-python test_pace_analysis.py
+python enhanced_wheat_comparison.py
 ```
 
 ### Historical Data Collection
@@ -103,14 +106,38 @@ python test_pace_analysis.py
 python fetch_historical_data.py
 ```
 
-## Output Files
-- `output/pace_analysis_report.json` - Complete analysis results
-- `output/pace_analysis_107_2025.html` - Interactive pace chart
-- `output/pace_dashboard_107_2025.html` - Executive dashboard
-- `output/wheat_exports.csv` - Raw export data
+### Batch ETL Processing
+```bash
+python batch_etl.py
+```
 
-## Next Steps
-- Consider expanding to additional commodities
-- Implement automated scheduling for regular updates
-- Add email/alert capabilities for significant pace deviations
-- Explore machine learning for export forecasting
+## Output Files
+- `output/enhanced_wheat_multi_commodity_comparison.html` - Multi-commodity dashboard with pace analysis
+- `output/wheat_exports.csv` - Raw export data
+- `data/esr_data.db` - SQLite database with all processed data
+
+## Dashboard Features
+- **Clean Projection Approach**: Simple dotted line to USDA target (complex modeling on backburner)
+- **Multi-Panel Layout**: Pace analysis, sales pipeline, and commodity breakdown
+- **McKinsey-Style Annotations**: Professional callouts with key insights
+- **Bendigo Color Theme**: Consistent burgundy/red branding throughout
+- **Interactive Charts**: Hover tooltips with detailed metrics
+
+## Technical Debt & Next Steps
+
+### Priority Issues (See ISSUES.md)
+**HIGH Priority:**
+- Centralize commodity mappings across files (#1)
+- Refactor SQLite connection management (#2)
+- Replace .iterrows() with vectorized operations (#3)
+
+**MEDIUM Priority:**
+- Add composite database index for performance (#7)
+- Centralize setup_logging() function (#4)
+- Add type hints to enhanced_wheat_comparison.py (#10)
+
+### Future Enhancements
+- Enhanced projection modeling (momentum-adjusted or commitments-based)
+- Automated scheduling for regular updates
+- Email/alert capabilities for significant pace deviations
+- Expand to additional commodities (corn, soybeans, etc.)

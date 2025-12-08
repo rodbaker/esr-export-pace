@@ -31,9 +31,9 @@ commodities:
     unit_id: 1  # Metric Tons
     
   - code: 106
-    name: "Wheat - Mixed"
-    description: "Mixed Wheat"
-    enabled: true
+    name: "Wheat - Soft White"
+    description: "Soft White Wheat"
+    enabled: false  # No data currently available
     unit_id: 1  # Metric Tons
     
   - code: 107
