@@ -24,38 +24,9 @@ try:
 except ImportError:
     pass  # python-dotenv not installed, skip
 
-import pandas as pd
-
 from src.esr_pace.etl import ESRETLPipeline
 from src.esr_pace.api_client import ESRAPIError
 from src.esr_pace.config import config_manager
-from src.esr_pace.marketing_week import marketing_week, my_start_month
-
-
-def export_world_csv_with_marketing_week(pipeline: ESRETLPipeline,
-                                         commodity_code: int,
-                                         output_path: Path) -> str:
-    """Export current-MY world CSV with correctly computed marketing_week_index.
-
-    Column names preserved to honor the contract with the brief assemblers
-    (reporter / /monitor-brief) — see CLAUDE.md "Downstream Integration".
-    The index is recomputed in Python from the commodity's MY start month,
-    replacing the broken value the legacy SQL view emits.
-    """
-    df = pipeline.data_store.get_current_marketing_year_data(commodity_code)
-    if df.empty:
-        raise ValueError(f"No data found for commodity {commodity_code}")
-
-    sm = my_start_month(commodity_code)
-    week_ending_dt = pd.to_datetime(df['week_ending'])
-    df['marketing_week_index'] = [
-        marketing_week(int(my), d.date(), start_month=sm)
-        for my, d in zip(df['market_year'], week_ending_dt)
-    ]
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(output_path, index=False)
-    return str(output_path)
 
 
 def sync_country_reference(pipeline: ESRETLPipeline, logger: logging.Logger) -> None:
@@ -293,8 +264,9 @@ def main():
                         csv_path = output_dir / f"commodity_{commodity.code}_{slug}_exports.csv"
 
                         try:
-                            exported_path = export_world_csv_with_marketing_week(
-                                pipeline, commodity.code, csv_path)
+                            exported_path = pipeline.export_to_csv(
+                                commodity_code=commodity.code,
+                                output_path=str(csv_path))
                             logger.info(f"    Exported to: {exported_path}")
                         except Exception as e:
                             logger.warning(f"    World CSV export failed: {e}")
