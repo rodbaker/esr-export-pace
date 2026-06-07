@@ -83,20 +83,27 @@ class ESRETLPipeline:
             return True, None, None
 
     COUNTRY_REF_MAX_AGE_DAYS = 7
+    # dim_metadata key recording the last reference sync. Operational note:
+    # DELETE this key (or wait out COUNTRY_REF_MAX_AGE_DAYS) to force a
+    # country-reference refresh on the next run:
+    #   DELETE FROM dim_metadata WHERE key = 'country_reference_synced_at';
+    COUNTRY_REF_SYNCED_KEY = 'country_reference_synced_at'
 
     def ensure_country_reference(self) -> None:
         """Populate/refresh dim_country if missing or stale.
 
         Runs at most once per pipeline instance and refetches at most once
-        per COUNTRY_REF_MAX_AGE_DAYS (tracked in dim_metadata), so every
-        path that loads country facts — batch, backfill, single-commodity —
-        gets named countries without hammering the API. Never fails the run.
+        per COUNTRY_REF_MAX_AGE_DAYS (tracked in dim_metadata under
+        COUNTRY_REF_SYNCED_KEY — delete that key to force a refresh), so
+        every path that loads country facts — batch, backfill,
+        single-commodity — gets named countries without hammering the API.
+        Never fails the run.
         """
         if self._country_ref_checked:
             return
         self._country_ref_checked = True
         try:
-            last = self.data_store.get_metadata('country_reference_synced_at')
+            last = self.data_store.get_metadata(self.COUNTRY_REF_SYNCED_KEY)
             if last:
                 age = datetime.now() - datetime.fromisoformat(last)
                 if age.days < self.COUNTRY_REF_MAX_AGE_DAYS:
@@ -104,7 +111,7 @@ class ESRETLPipeline:
             countries = self.api_client.get_countries()
             n = self.data_store.upsert_countries(countries)
             self.data_store.set_metadata(
-                'country_reference_synced_at', datetime.now().isoformat())
+                self.COUNTRY_REF_SYNCED_KEY, datetime.now().isoformat())
             logger.info(f"Synced {n} country reference rows")
         except Exception as e:
             logger.warning(f"Country reference sync failed (continuing): {e}")

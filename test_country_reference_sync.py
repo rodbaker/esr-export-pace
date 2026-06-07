@@ -25,7 +25,11 @@ def test_sync_populates_dim_country_and_sets_metadata(tmp_path, monkeypatch):
     row = pipe.data_store._get_connection().execute(
         "SELECT country_name FROM dim_country WHERE country_code=1220").fetchone()
     assert row == ('CANADA',)
-    assert pipe.data_store.get_metadata('country_reference_synced_at') is not None
+    # The key name is the operational force-refresh hook: deleting it from
+    # dim_metadata forces a reference resync on the next run.
+    assert ESRETLPipeline.COUNTRY_REF_SYNCED_KEY == 'country_reference_synced_at'
+    assert pipe.data_store.get_metadata(
+        ESRETLPipeline.COUNTRY_REF_SYNCED_KEY) is not None
 
 
 def test_sync_runs_once_per_pipeline_instance(tmp_path, monkeypatch):
