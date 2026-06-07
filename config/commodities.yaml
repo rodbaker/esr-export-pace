@@ -1,68 +1,79 @@
 # Commodities tracked by the ESR Export Pace pipeline.
-# Wheat classes (June MY), Corn (Sept MY), Soy complex (Sept/Oct MY).
+# my_start_month = first month of the USDA marketing year (required).
 commodities:
   - code: 101
     name: "Wheat - HRW"
     description: "Hard Red Winter"
     enabled: true
     unit_id: 1  # Metric Tons
+    my_start_month: 6
 
   - code: 102
     name: "Wheat - SRW"
     description: "Soft Red Winter"
     enabled: true
     unit_id: 1  # Metric Tons
+    my_start_month: 6
 
   - code: 103
     name: "Wheat - HRS"
     description: "Hard Red Spring"
     enabled: true
     unit_id: 1  # Metric Tons
+    my_start_month: 6
 
   - code: 104
     name: "Wheat - White"
     description: "White Wheat"
     enabled: true
     unit_id: 1  # Metric Tons
+    my_start_month: 6
 
   - code: 105
     name: "Wheat - Durum"
     description: "Durum Wheat"
     enabled: true
     unit_id: 1  # Metric Tons
+    my_start_month: 6
 
   - code: 106
     name: "Wheat - Soft White"
     description: "Soft White Wheat"
     enabled: false  # No data currently available
     unit_id: 1  # Metric Tons
+    my_start_month: 6
 
   - code: 107
     name: "All Wheat"
     description: "All Wheat Classes Combined"
     enabled: true
     unit_id: 1  # Metric Tons
+    my_start_month: 6
 
   - code: 401
     name: "Corn"
     description: "Corn (Maize)"
     enabled: true
     unit_id: 1  # Metric Tons
+    my_start_month: 9
 
   - code: 801
     name: "Soybeans"
     description: "Soybeans"
     enabled: true
     unit_id: 1  # Metric Tons
+    my_start_month: 9
 
   - code: 901
     name: "Soybean Meal"
     description: "Soybean Cake & Meal"
     enabled: true
     unit_id: 1  # Metric Tons
+    my_start_month: 10
 
   - code: 902
     name: "Soybean Oil"
     description: "Soybean Oil"
     enabled: true
     unit_id: 1  # Metric Tons
+    my_start_month: 10

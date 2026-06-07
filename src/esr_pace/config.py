@@ -14,6 +14,7 @@ class CommodityConfig:
     name: str
     enabled: bool
     unit_id: int
+    my_start_month: int  # first month of the USDA marketing year (1-12)
     description: Optional[str] = None
 
 @dataclass
@@ -29,7 +30,10 @@ class AppConfig:
 class ConfigManager:
     """Load and manage application configuration"""
     
-    def __init__(self, config_dir: str = "config"):
+    def __init__(self, config_dir: Optional[str] = None):
+        if config_dir is None:
+            # default: <repo root>/config, independent of cwd
+            config_dir = Path(__file__).resolve().parents[2] / "config"
         self.config_dir = Path(config_dir)
         self._config: Optional[AppConfig] = None
     
