@@ -110,6 +110,16 @@ class ESRDataStore:
             )
         """)
 
+        # Migration: USDA delivers space-padded names ('CANADA  '); rows
+        # ingested before stripping was added are trimmed in place.
+        # Idempotent and cheap (dim_country is ~200 rows).
+        conn.execute("""
+            UPDATE dim_country SET
+                country_name = TRIM(country_name),
+                country_description = TRIM(country_description),
+                genc_code = TRIM(genc_code)
+        """)
+
         # Create metadata table
         conn.execute("""
             CREATE TABLE IF NOT EXISTS dim_metadata (
@@ -569,13 +579,27 @@ class ESRDataStore:
             df['net_sales_mt'], errors='coerce').replace([np.inf, -np.inf], np.nan)
         df['net_sales_mt'] = df['net_sales_mt'].where(pd.notna(df['net_sales_mt']), None)
 
-        for col in ['commodity_code', 'market_year', 'country_code']:
-            df[col] = pd.to_numeric(df[col], errors='coerce').astype('int64')
+        # Validate key columns: coerce, then DROP+LOG invalid rows rather
+        # than letting one malformed row abort the whole commodity batch
+        # (astype('int64') raises on NaN).
+        key_cols = ['commodity_code', 'market_year', 'country_code']
+        for col in key_cols:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
 
         if df['week_ending'].dtype != 'object':
             df['week_ending'] = pd.to_datetime(
                 df['week_ending'], errors='coerce').dt.strftime('%Y-%m-%d')
-        df = df[df['week_ending'].notna() & (df['week_ending'] != '')]
+        bad_keys = (df[key_cols].isna().any(axis=1)
+                    | df['week_ending'].isna() | (df['week_ending'] == ''))
+        if bad_keys.any():
+            logger.warning(
+                f"Dropping {int(bad_keys.sum())} country rows with invalid "
+                f"key columns ({key_cols + ['week_ending']})")
+            df = df[~bad_keys]
+        if df.empty:
+            return 0
+        for col in key_cols:
+            df[col] = df[col].astype('int64')
 
         try:
             # Bulk delete then insert (true upsert) — scoped to the keys we have
@@ -600,10 +624,14 @@ class ESRDataStore:
         if not countries:
             return 0
         conn = self._get_connection()
+
+        def _strip(value):
+            return value.strip() if isinstance(value, str) else value
+
         rows = [
-            (c.get('countryCode'), c.get('countryName'),
-             c.get('countryDescription'), c.get('regionId'), c.get('gencCode'),
-             datetime.now().isoformat())
+            (c.get('countryCode'), _strip(c.get('countryName')),
+             _strip(c.get('countryDescription')), c.get('regionId'),
+             _strip(c.get('gencCode')), datetime.now().isoformat())
             for c in countries if c.get('countryCode') is not None
         ]
         conn.executemany(
