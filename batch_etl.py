@@ -24,9 +24,48 @@ try:
 except ImportError:
     pass  # python-dotenv not installed, skip
 
+import pandas as pd
+
 from src.esr_pace.etl import ESRETLPipeline
 from src.esr_pace.api_client import ESRAPIError
 from src.esr_pace.config import config_manager
+from src.esr_pace.marketing_week import marketing_week, my_start_month
+
+
+def export_world_csv_with_marketing_week(pipeline: ESRETLPipeline,
+                                         commodity_code: int,
+                                         output_path: Path) -> str:
+    """Export current-MY world CSV with correctly computed marketing_week_index.
+
+    Column names preserved to honor the contract with the brief assemblers
+    (reporter / /monitor-brief) — see CLAUDE.md "Downstream Integration".
+    The index is recomputed in Python from the commodity's MY start month,
+    replacing the broken value the legacy SQL view emits.
+    """
+    df = pipeline.data_store.get_current_marketing_year_data(commodity_code)
+    if df.empty:
+        raise ValueError(f"No data found for commodity {commodity_code}")
+
+    sm = my_start_month(commodity_code)
+    week_ending_dt = pd.to_datetime(df['week_ending'])
+    df['marketing_week_index'] = [
+        marketing_week(int(my), d.date(), start_month=sm)
+        for my, d in zip(df['market_year'], week_ending_dt)
+    ]
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(output_path, index=False)
+    return str(output_path)
+
+
+def sync_country_reference(pipeline: ESRETLPipeline, logger: logging.Logger) -> None:
+    """Pull country reference data once per batch run."""
+    try:
+        countries = pipeline.api_client.get_countries()
+        pipeline.data_store.upsert_countries(countries)
+        logger.info(f"Synced {len(countries)} country reference rows")
+    except Exception as e:
+        logger.warning(f"Country reference sync failed: {e}")
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -221,7 +260,10 @@ def main():
         # Initialize ETL pipeline
         logger.info("Initializing ETL pipeline...")
         pipeline = ESRETLPipeline(api_key=api_key)
-        
+
+        # Sync country reference data once per batch
+        sync_country_reference(pipeline, logger)
+
         start_time = datetime.now()
         
         # Process each commodity
@@ -246,18 +288,28 @@ def main():
                         logger.info(f"    Records loaded: {results['records_loaded']}")
                         logger.info(f"    Duration: {results['duration_seconds']:.2f}s")
                         
-                        # Export to CSV
-                        csv_filename = f"commodity_{commodity.code}_{commodity.name.lower().replace(' ', '_').replace('-', '_')}_exports.csv"
-                        csv_path = output_dir / csv_filename
-                        
+                        # Export world-level CSV (column names preserved for downstream contract)
+                        slug = commodity.name.lower().replace(' ', '_').replace('-', '_')
+                        csv_path = output_dir / f"commodity_{commodity.code}_{slug}_exports.csv"
+
                         try:
-                            exported_path = pipeline.export_to_csv(
-                                commodity_code=commodity.code,
-                                output_path=str(csv_path)
-                            )
+                            exported_path = export_world_csv_with_marketing_week(
+                                pipeline, commodity.code, csv_path)
                             logger.info(f"    Exported to: {exported_path}")
                         except Exception as e:
-                            logger.warning(f"    CSV export failed: {e}")
+                            logger.warning(f"    World CSV export failed: {e}")
+
+                        # Export top-10 destination countries CSV
+                        top_csv_path = output_dir / f"commodity_{commodity.code}_{slug}_top_countries.csv"
+                        try:
+                            top_path = pipeline.data_store.export_top_countries_to_csv(
+                                commodity_code=commodity.code,
+                                output_path=str(top_csv_path),
+                                top_n=10,
+                            )
+                            logger.info(f"    Top-countries CSV: {top_path}")
+                        except Exception as e:
+                            logger.warning(f"    Top-countries CSV export failed: {e}")
                         
                         results_summary['successful'] += 1
                 else:

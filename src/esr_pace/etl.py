@@ -202,6 +202,47 @@ class ESRETLPipeline:
         
         return world_data
     
+    def transform_to_country_weekly(self, raw_df: pd.DataFrame,
+                                    commodity_code: int,
+                                    market_year: int) -> pd.DataFrame:
+        """Transform raw API rows into the fact_esr_country_weekly schema.
+
+        Keeps full country granularity — no aggregation across countries.
+        """
+        if raw_df.empty:
+            return pd.DataFrame()
+
+        df = raw_df.copy()
+        numeric_cols = ['weeklyExports', 'accumulatedExports', 'outstandingSales',
+                        'currentMYNetSales', 'currentMYTotalCommitment']
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').replace(
+                    [np.inf, -np.inf], np.nan).fillna(0)
+
+        df['commodity_code'] = commodity_code
+        df['market_year'] = market_year
+
+        rename = {
+            'countryCode': 'country_code',
+            'weekEndingDate': 'week_ending',
+            'weeklyExports': 'weekly_exports_mt',
+            'accumulatedExports': 'accumulated_exports_mt',
+            'outstandingSales': 'outstanding_sales_mt',
+            'currentMYNetSales': 'net_sales_mt',
+            'currentMYTotalCommitment': 'total_commitment_mt',
+        }
+        df = df.rename(columns=rename)
+
+        df['week_ending'] = pd.to_datetime(
+            df['week_ending'], errors='coerce').dt.strftime('%Y-%m-%d')
+        df = df[df['week_ending'].notna() & (df['week_ending'] != 'NaT')]
+
+        cols = ['commodity_code', 'market_year', 'week_ending', 'country_code',
+                'weekly_exports_mt', 'accumulated_exports_mt',
+                'outstanding_sales_mt', 'net_sales_mt', 'total_commitment_mt']
+        return df[cols].reset_index(drop=True)
+
     def load_to_database(self, world_df: pd.DataFrame) -> int:
         """Load world-aggregated data to database.
         
@@ -312,9 +353,19 @@ class ESRETLPipeline:
                 logger.info("Running validation on aggregated data")
                 agg_validation = self.validator.validate_aggregation(raw_df, world_df)
                 
-            # Step 6: Load to database
+            # Step 6: Load to database (world aggregate)
             records_loaded = self.load_to_database(world_df)
             results['records_loaded'] = records_loaded
+
+            # Step 6b: Country-level load (additive — country granularity)
+            try:
+                country_df = self.transform_to_country_weekly(
+                    raw_df, commodity_code, market_year)
+                country_loaded = self.data_store.upsert_country_data(country_df)
+                results['country_records_loaded'] = country_loaded
+            except Exception as e:
+                logger.warning(f"Country-level load failed for {commodity_code}: {e}")
+                results['country_records_loaded'] = 0
             
             # Step 7: Update metadata with successful timestamp (only for current year)
             if api_timestamp and not target_market_year:

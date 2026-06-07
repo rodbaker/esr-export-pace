@@ -68,6 +68,46 @@ class ESRDataStore:
             )
         """)
         
+        # Country-level fact table (additive — does not alter fact_esr_world_weekly).
+        # Holds full destination-country granularity for all commodities.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS fact_esr_country_weekly (
+                commodity_code INTEGER NOT NULL,
+                market_year INTEGER NOT NULL,
+                week_ending DATE NOT NULL,
+                country_code INTEGER NOT NULL,
+                weekly_exports_mt REAL NOT NULL DEFAULT 0,
+                accumulated_exports_mt REAL NOT NULL DEFAULT 0,
+                outstanding_sales_mt REAL NOT NULL DEFAULT 0,
+                net_sales_mt REAL DEFAULT 0,
+                total_commitment_mt REAL NOT NULL DEFAULT 0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+                PRIMARY KEY (commodity_code, market_year, week_ending, country_code)
+            )
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_country_commodity_year
+            ON fact_esr_country_weekly(commodity_code, market_year)
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_country_country
+            ON fact_esr_country_weekly(country_code)
+        """)
+
+        # Country reference table
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS dim_country (
+                country_code INTEGER PRIMARY KEY,
+                country_name TEXT NOT NULL,
+                country_description TEXT,
+                region_id INTEGER,
+                genc_code TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         # Create metadata table
         conn.execute("""
             CREATE TABLE IF NOT EXISTS dim_metadata (
@@ -466,6 +506,141 @@ class ESRDataStore:
         
         return stats
     
+    def upsert_country_data(self, df: pd.DataFrame) -> int:
+        """Insert or update country-level weekly ESR data.
+
+        Required columns: commodity_code, market_year, week_ending, country_code,
+        weekly_exports_mt, accumulated_exports_mt, outstanding_sales_mt,
+        net_sales_mt, total_commitment_mt.
+        """
+        if df.empty:
+            return 0
+
+        required = {
+            'commodity_code', 'market_year', 'week_ending', 'country_code',
+            'weekly_exports_mt', 'accumulated_exports_mt', 'outstanding_sales_mt',
+            'net_sales_mt', 'total_commitment_mt',
+        }
+        missing = required - set(df.columns)
+        if missing:
+            raise ValueError(f"Missing required columns for country upsert: {missing}")
+
+        conn = self._get_connection()
+        df = df.copy()
+        df['updated_at'] = datetime.now().isoformat()
+
+        # Coerce numerics
+        for col in ['weekly_exports_mt', 'accumulated_exports_mt',
+                    'outstanding_sales_mt', 'total_commitment_mt']:
+            df[col] = pd.to_numeric(df[col], errors='coerce').replace(
+                [np.inf, -np.inf], np.nan).fillna(0.0).astype('float64')
+        df['net_sales_mt'] = pd.to_numeric(
+            df['net_sales_mt'], errors='coerce').replace([np.inf, -np.inf], np.nan)
+        df['net_sales_mt'] = df['net_sales_mt'].where(pd.notna(df['net_sales_mt']), None)
+
+        for col in ['commodity_code', 'market_year', 'country_code']:
+            df[col] = pd.to_numeric(df[col], errors='coerce').astype('int64')
+
+        if df['week_ending'].dtype != 'object':
+            df['week_ending'] = pd.to_datetime(
+                df['week_ending'], errors='coerce').dt.strftime('%Y-%m-%d')
+        df = df[df['week_ending'].notna() & (df['week_ending'] != '')]
+
+        try:
+            # Bulk delete then insert (true upsert) — scoped to the keys we have
+            keys = df[['commodity_code', 'market_year', 'week_ending', 'country_code']]
+            conn.executemany(
+                """DELETE FROM fact_esr_country_weekly
+                   WHERE commodity_code=? AND market_year=? AND week_ending=? AND country_code=?""",
+                keys.itertuples(index=False, name=None),
+            )
+            df.to_sql('fact_esr_country_weekly', conn,
+                      if_exists='append', index=False, method='multi', chunksize=500)
+            conn.commit()
+            logger.info(f"Upserted {len(df)} country-level rows")
+            return len(df)
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Failed to upsert country data: {e}")
+            raise
+
+    def upsert_countries(self, countries: List[Dict[str, Any]]) -> int:
+        """Upsert country reference rows from /api/esr/countries response."""
+        if not countries:
+            return 0
+        conn = self._get_connection()
+        rows = [
+            (c.get('countryCode'), c.get('countryName'),
+             c.get('countryDescription'), c.get('regionId'), c.get('gencCode'),
+             datetime.now().isoformat())
+            for c in countries if c.get('countryCode') is not None
+        ]
+        conn.executemany(
+            """INSERT OR REPLACE INTO dim_country
+               (country_code, country_name, country_description, region_id, genc_code, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            rows,
+        )
+        conn.commit()
+        logger.info(f"Upserted {len(rows)} country reference rows")
+        return len(rows)
+
+    def export_top_countries_to_csv(self,
+                                    commodity_code: int,
+                                    output_path: str,
+                                    market_year: Optional[int] = None,
+                                    top_n: int = 10) -> str:
+        """Export top-N destination countries (by accumulated exports) for the
+        given commodity/MY to CSV. Includes the full weekly time-series for
+        each top country so downstream consumers can trend them.
+        """
+        conn = self._get_connection()
+
+        if market_year is None:
+            cur = conn.execute(
+                "SELECT MAX(market_year) FROM fact_esr_country_weekly WHERE commodity_code=?",
+                (commodity_code,),
+            )
+            row = cur.fetchone()
+            market_year = row[0] if row else None
+        if market_year is None:
+            raise ValueError(f"No country data for commodity {commodity_code}")
+
+        top_q = """
+            SELECT country_code, MAX(accumulated_exports_mt) AS total_mt
+            FROM fact_esr_country_weekly
+            WHERE commodity_code=? AND market_year=?
+            GROUP BY country_code
+            ORDER BY total_mt DESC
+            LIMIT ?
+        """
+        top_df = pd.read_sql_query(top_q, conn, params=(commodity_code, market_year, top_n))
+        if top_df.empty:
+            raise ValueError(f"No country data for commodity {commodity_code}, MY {market_year}")
+
+        top_codes = tuple(int(c) for c in top_df['country_code'].tolist())
+        placeholders = ','.join('?' for _ in top_codes)
+        detail_q = f"""
+            SELECT f.commodity_code, f.market_year, f.week_ending, f.country_code,
+                   COALESCE(c.country_name, 'Unknown') AS country_name,
+                   f.weekly_exports_mt, f.accumulated_exports_mt,
+                   f.outstanding_sales_mt, f.total_commitment_mt
+            FROM fact_esr_country_weekly f
+            LEFT JOIN dim_country c ON c.country_code = f.country_code
+            WHERE f.commodity_code=? AND f.market_year=? AND f.country_code IN ({placeholders})
+            ORDER BY f.country_code, f.week_ending
+        """
+        detail = pd.read_sql_query(
+            detail_q, conn,
+            params=(commodity_code, market_year, *top_codes),
+        )
+
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        detail.to_csv(output_path, index=False)
+        logger.info(f"Exported {len(detail)} top-country rows to {output_path}")
+        return str(output_path)
+
     def close(self):
         """Close database connection."""
         if self.conn:
