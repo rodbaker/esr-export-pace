@@ -33,7 +33,8 @@ class ESRETLPipeline:
         self.api_client = api_client or ESRAPIClient(api_key=api_key)
         self.data_store = data_store or ESRDataStore()
         self.validator = validator or ESRDataValidator(fail_on_structural_errors=True)
-        
+        self._country_ref_checked = False
+
     def check_freshness(self, commodity_code: int) -> Tuple[bool, Optional[str], Optional[int]]:
         """Check if data needs to be refreshed based on release timestamps.
         
@@ -80,7 +81,34 @@ class ESRETLPipeline:
             logger.error(f"Failed to check freshness for commodity {commodity_code}: {e}")
             # On API error, assume refresh needed to avoid stale data
             return True, None, None
-    
+
+    COUNTRY_REF_MAX_AGE_DAYS = 7
+
+    def ensure_country_reference(self) -> None:
+        """Populate/refresh dim_country if missing or stale.
+
+        Runs at most once per pipeline instance and refetches at most once
+        per COUNTRY_REF_MAX_AGE_DAYS (tracked in dim_metadata), so every
+        path that loads country facts — batch, backfill, single-commodity —
+        gets named countries without hammering the API. Never fails the run.
+        """
+        if self._country_ref_checked:
+            return
+        self._country_ref_checked = True
+        try:
+            last = self.data_store.get_metadata('country_reference_synced_at')
+            if last:
+                age = datetime.now() - datetime.fromisoformat(last)
+                if age.days < self.COUNTRY_REF_MAX_AGE_DAYS:
+                    return
+            countries = self.api_client.get_countries()
+            n = self.data_store.upsert_countries(countries)
+            self.data_store.set_metadata(
+                'country_reference_synced_at', datetime.now().isoformat())
+            logger.info(f"Synced {n} country reference rows")
+        except Exception as e:
+            logger.warning(f"Country reference sync failed (continuing): {e}")
+
     def extract_raw_data(self, commodity_code: int, market_year: int) -> pd.DataFrame:
         """Extract raw export data from ESR API.
         
@@ -356,6 +384,9 @@ class ESRETLPipeline:
             # Step 6: Load to database (world aggregate)
             records_loaded = self.load_to_database(world_df)
             results['records_loaded'] = records_loaded
+
+            # Country reference must exist before country facts are useful.
+            self.ensure_country_reference()
 
             # Step 6b: Country-level load (additive — country granularity).
             # Failures do not fail the world load, but they must be VISIBLE:

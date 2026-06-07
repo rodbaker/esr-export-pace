@@ -29,16 +29,6 @@ from src.esr_pace.api_client import ESRAPIError
 from src.esr_pace.config import config_manager
 
 
-def sync_country_reference(pipeline: ESRETLPipeline, logger: logging.Logger) -> None:
-    """Pull country reference data once per batch run."""
-    try:
-        countries = pipeline.api_client.get_countries()
-        pipeline.data_store.upsert_countries(countries)
-        logger.info(f"Synced {len(countries)} country reference rows")
-    except Exception as e:
-        logger.warning(f"Country reference sync failed: {e}")
-
-
 def setup_logging(verbose: bool = False) -> None:
     """Setup logging configuration."""
     level = logging.DEBUG if verbose else logging.INFO
@@ -231,9 +221,6 @@ def main():
         # Initialize ETL pipeline
         logger.info("Initializing ETL pipeline...")
         pipeline = ESRETLPipeline(api_key=api_key)
-
-        # Sync country reference data once per batch
-        sync_country_reference(pipeline, logger)
 
         start_time = datetime.now()
         
