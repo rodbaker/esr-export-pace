@@ -357,15 +357,19 @@ class ESRETLPipeline:
             records_loaded = self.load_to_database(world_df)
             results['records_loaded'] = records_loaded
 
-            # Step 6b: Country-level load (additive — country granularity)
+            # Step 6b: Country-level load (additive — country granularity).
+            # Failures do not fail the world load, but they must be VISIBLE:
+            # recorded in results and logged at error level so callers can
+            # surface them (batch_etl exits non-zero).
             try:
                 country_df = self.transform_to_country_weekly(
                     raw_df, commodity_code, market_year)
                 country_loaded = self.data_store.upsert_country_data(country_df)
                 results['country_records_loaded'] = country_loaded
             except Exception as e:
-                logger.warning(f"Country-level load failed for {commodity_code}: {e}")
+                logger.error(f"Country-level load failed for {commodity_code}: {e}")
                 results['country_records_loaded'] = 0
+                results['country_load_error'] = str(e)
             
             # Step 7: Update metadata with successful timestamp (only for current year)
             if api_timestamp and not target_market_year:

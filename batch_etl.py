@@ -258,7 +258,15 @@ def main():
                         logger.info(f"    Records processed: {results['records_processed']}")
                         logger.info(f"    Records loaded: {results['records_loaded']}")
                         logger.info(f"    Duration: {results['duration_seconds']:.2f}s")
-                        
+
+                        country_error = results.get('country_load_error')
+                        if country_error:
+                            logger.error(
+                                f"    Country-level load FAILED: {country_error}")
+                            results_summary['errors'].append(
+                                f"{commodity.name} (country-level): {country_error}")
+
+
                         # Export world-level CSV (column names preserved for downstream contract)
                         slug = commodity.name.lower().replace(' ', '_').replace('-', '_')
                         csv_path = output_dir / f"commodity_{commodity.code}_{slug}_exports.csv"
@@ -329,8 +337,9 @@ def main():
             except Exception as e:
                 logger.warning(f"Failed to get database statistics: {e}")
         
-        # Determine exit code
-        if results_summary['failed'] > 0:
+        # Determine exit code (any failure OR recorded error, e.g. a
+        # country-level load failure on an otherwise-successful commodity)
+        if results_summary['failed'] > 0 or results_summary['errors']:
             logger.warning("=== Batch Processing Completed with Errors ===")
             return 1
         else:
