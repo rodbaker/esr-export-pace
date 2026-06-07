@@ -8,6 +8,8 @@ from typing import Dict, List, Optional, Any
 import logging
 from datetime import datetime
 
+from .marketing_week import marketing_week_series, my_start_month
+
 
 logger = logging.getLogger(__name__)
 
@@ -133,22 +135,31 @@ class ESRDataStore:
             ON dim_metadata(updated_at)
         """)
         
-        # Create views
+        # Create views.
+        # DROP+CREATE (not IF NOT EXISTS) so schema fixes migrate existing
+        # databases automatically. The week index is intentionally NOT
+        # computed in SQL: start months differ per commodity, so
+        # get_current_marketing_year_data() computes it in Python from
+        # config/commodities.yaml.
+        conn.execute("DROP VIEW IF EXISTS v_current_marketing_year")
         conn.execute("""
-            CREATE VIEW IF NOT EXISTS v_current_marketing_year AS
-            SELECT 
-                commodity_code,
-                market_year,
-                week_ending,
-                weekly_exports_mt,
-                accumulated_exports_mt,
-                outstanding_sales_mt,
-                total_commitment_mt,
-                -- Marketing week index (calculated from June 1 start)
-                (julianday(week_ending) - julianday(market_year - 1 || '-06-01')) / 7 + 1 as marketing_week_index
-            FROM fact_esr_world_weekly
-            WHERE market_year = (SELECT MAX(market_year) FROM fact_esr_world_weekly)
-            ORDER BY commodity_code, week_ending
+            CREATE VIEW v_current_marketing_year AS
+            SELECT
+                f.commodity_code,
+                f.market_year,
+                f.week_ending,
+                f.weekly_exports_mt,
+                f.accumulated_exports_mt,
+                f.outstanding_sales_mt,
+                f.total_commitment_mt
+            FROM fact_esr_world_weekly f
+            JOIN (
+                SELECT commodity_code, MAX(market_year) AS current_my
+                FROM fact_esr_world_weekly
+                GROUP BY commodity_code
+            ) cur ON cur.commodity_code = f.commodity_code
+                 AND cur.current_my = f.market_year
+            ORDER BY f.commodity_code, f.week_ending
         """)
         
         conn.commit()
@@ -356,24 +367,44 @@ class ESRDataStore:
         return pd.read_sql_query(query, conn, params=params)
     
     def get_current_marketing_year_data(self, commodity_code: Optional[int] = None) -> pd.DataFrame:
-        """Get data for the current marketing year using the view.
-        
+        """Get data for each commodity's current marketing year.
+
+        The current MY is the per-commodity MAX(market_year) (commodities
+        roll at different months). marketing_week_index is computed here in
+        Python — one place, correct start month per commodity — replacing
+        the formerly broken SQL view expression.
+
         Args:
             commodity_code: Optional filter by commodity code
-            
+
         Returns:
-            DataFrame with current marketing year data including marketing_week_index
+            DataFrame with current marketing year data including
+            marketing_week_index
         """
         conn = self._get_connection()
-        
+
         query = "SELECT * FROM v_current_marketing_year"
         params = []
-        
+
         if commodity_code is not None:
             query += " WHERE commodity_code = ?"
             params.append(commodity_code)
-        
-        return pd.read_sql_query(query, conn, params=params)
+
+        df = pd.read_sql_query(query, conn, params=params)
+        if df.empty:
+            df['marketing_week_index'] = pd.Series(dtype='int64')
+            return df
+
+        parts = []
+        for code, grp in df.groupby('commodity_code'):
+            grp = grp.copy()
+            grp['marketing_week_index'] = marketing_week_series(
+                grp['market_year'], grp['week_ending'],
+                my_start_month(int(code)))
+            parts.append(grp)
+        return (pd.concat(parts)
+                .sort_values(['commodity_code', 'week_ending'])
+                .reset_index(drop=True))
     
     def set_metadata(self, key: str, value: str) -> None:
         """Set a metadata key-value pair.
