@@ -586,9 +586,11 @@ class ESRDataStore:
         for col in key_cols:
             df[col] = pd.to_numeric(df[col], errors='coerce')
 
-        if df['week_ending'].dtype != 'object':
-            df['week_ending'] = pd.to_datetime(
-                df['week_ending'], errors='coerce').dt.strftime('%Y-%m-%d')
+        # Always parse week_ending (string or datetime input): valid values
+        # normalize to YYYY-MM-DD, unparseable ones coerce to NaT/NaN and
+        # are dropped below with the other invalid keys.
+        df['week_ending'] = pd.to_datetime(
+            df['week_ending'], errors='coerce').dt.strftime('%Y-%m-%d')
         bad_keys = (df[key_cols].isna().any(axis=1)
                     | df['week_ending'].isna() | (df['week_ending'] == ''))
         if bad_keys.any():

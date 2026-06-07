@@ -69,3 +69,25 @@ def test_upsert_country_data_all_invalid_returns_zero(tmp_path):
     store = _mk_store(tmp_path)
     df = pd.DataFrame([_base_row(country_code='not-a-code')])
     assert store.upsert_country_data(df) == 0
+
+
+def test_upsert_country_data_drops_unparseable_string_dates(tmp_path, caplog):
+    # week_ending arrives as object dtype (strings) on the normal ETL path;
+    # an unparseable value must be dropped+logged, not inserted verbatim.
+    store = _mk_store(tmp_path)
+    df = pd.DataFrame([
+        _base_row(),
+        _base_row(week_ending='not-a-date', country_code=1230),
+    ])
+    n = store.upsert_country_data(df)
+    assert n == 1
+    stored = store._get_connection().execute(
+        "SELECT week_ending FROM fact_esr_country_weekly").fetchall()
+    assert stored == [('2025-09-04',)]        # valid string date preserved
+    assert any('invalid key' in r.message.lower() for r in caplog.records)
+
+
+def test_upsert_country_data_all_invalid_dates_return_zero(tmp_path):
+    store = _mk_store(tmp_path)
+    df = pd.DataFrame([_base_row(week_ending='not-a-date')])
+    assert store.upsert_country_data(df) == 0
