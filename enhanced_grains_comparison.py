@@ -19,10 +19,6 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-sys.path.insert(0, str(Path(__file__).parent / 'src'))
-from esr_pace.marketing_week import marketing_week, my_start_month  # noqa: E402
-
-
 DB_PATH = Path(__file__).parent / 'data' / 'esr_data.db'
 OUTPUT_HTML = Path(__file__).parent / 'output' / 'enhanced_grains_comparison.html'
 
@@ -46,9 +42,6 @@ GROUP_COLORS = {
     'soy':   '#1F6E3B',
 }
 
-CURRENT_MY = 2026
-
-
 def load_world_history(conn: sqlite3.Connection, code: int) -> pd.DataFrame:
     df = pd.read_sql_query(
         """SELECT market_year, week_ending, accumulated_exports_mt,
@@ -61,9 +54,11 @@ def load_world_history(conn: sqlite3.Connection, code: int) -> pd.DataFrame:
     if df.empty:
         return df
     df['week_ending'] = pd.to_datetime(df['week_ending'])
-    sm = my_start_month(code)
-    df['mw'] = [marketing_week(int(my), d.date(), start_month=sm)
-                for my, d in zip(df['market_year'], df['week_ending'])]
+    # Ordinal week-within-season: position of the week in its MY, immune to
+    # which weekday the MY start lands on (matches enhanced_wheat_comparison's
+    # ROW_NUMBER alignment).
+    df = df.sort_values(['market_year', 'week_ending']).reset_index(drop=True)
+    df['mw'] = df.groupby('market_year').cumcount() + 1
     return df
 
 
@@ -86,40 +81,41 @@ def load_top_countries(conn: sqlite3.Connection, code: int, my: int,
     return df
 
 
-def pace_metric(hist: pd.DataFrame, code: int) -> Dict[str, float]:
-    """Compare current-MY accumulated exports at the latest week vs the 5-year
-    average accumulated exports at the same marketing week index."""
-    cur = hist[hist['market_year'] == CURRENT_MY]
+def pace_metric(hist: pd.DataFrame, current_my: int) -> Dict[str, float]:
+    """Compare current-MY accumulated exports at the latest week vs the
+    5-year average at the same ordinal week. pace_pct is None (not 0.0)
+    when no baseline week exists."""
+    cur = hist[hist['market_year'] == current_my]
     if cur.empty:
-        return {'current_mt': 0.0, 'avg_mt': 0.0, 'pace_pct': 0.0,
+        return {'current_mt': 0.0, 'avg_mt': 0.0, 'pace_pct': None,
                 'commitment_mt': 0.0, 'latest_week': ''}
     last = cur.sort_values('week_ending').iloc[-1]
     mw_now = int(last['mw'])
     five_year = hist[
-        (hist['market_year'].between(CURRENT_MY - 5, CURRENT_MY - 1)) &
+        (hist['market_year'].between(current_my - 5, current_my - 1)) &
         (hist['mw'] == mw_now)
     ]
-    avg = float(five_year['accumulated_exports_mt'].mean()) if not five_year.empty else 0.0
+    avg = float(five_year['accumulated_exports_mt'].mean()) if not five_year.empty else None
     cur_acc = float(last['accumulated_exports_mt'])
-    pace = ((cur_acc / avg) - 1) * 100 if avg else 0.0
+    pace = ((cur_acc / avg) - 1) * 100 if avg else None
     return {
         'current_mt': cur_acc,
-        'avg_mt': avg,
+        'avg_mt': avg if avg is not None else 0.0,
         'pace_pct': pace,
         'commitment_mt': float(last['total_commitment_mt']),
         'latest_week': last['week_ending'].strftime('%Y-%m-%d'),
     }
 
 
-def build_pace_figure(hist: pd.DataFrame, code: int, label: str,
+def build_pace_figure(hist: pd.DataFrame, current_my: int, label: str,
                       color: str) -> go.Figure:
     fig = go.Figure()
     if hist.empty:
         fig.update_layout(title=f"{label} — no data")
         return fig
 
-    # 5-year envelope (min/max) and average by marketing week index
-    past = hist[hist['market_year'].between(CURRENT_MY - 5, CURRENT_MY - 1)]
+    # 5-year envelope (min/max) and average by ordinal week index
+    past = hist[hist['market_year'].between(current_my - 5, current_my - 1)]
     if not past.empty:
         grp = past.groupby('mw')['accumulated_exports_mt']
         env = grp.agg(['min', 'max', 'mean']).reset_index().sort_values('mw')
@@ -141,7 +137,7 @@ def build_pace_figure(hist: pd.DataFrame, code: int, label: str,
 
     # Prior individual seasons (faint)
     for my in sorted(hist['market_year'].unique()):
-        if my == CURRENT_MY or my < CURRENT_MY - 5:
+        if my == current_my or my < current_my - 5:
             continue
         season = hist[hist['market_year'] == my].sort_values('mw')
         fig.add_trace(go.Scatter(
@@ -151,14 +147,14 @@ def build_pace_figure(hist: pd.DataFrame, code: int, label: str,
         ))
 
     # Current MY
-    cur = hist[hist['market_year'] == CURRENT_MY].sort_values('mw')
+    cur = hist[hist['market_year'] == current_my].sort_values('mw')
     if not cur.empty:
         fig.add_trace(go.Scatter(
             x=cur['mw'], y=cur['accumulated_exports_mt'] / 1e6,
             mode='lines+markers',
             line=dict(color=color, width=3),
             marker=dict(size=4, color=color),
-            name=f'MY {CURRENT_MY} (current)',
+            name=f'MY {current_my} (current)',
         ))
 
     fig.update_layout(
@@ -173,7 +169,7 @@ def build_pace_figure(hist: pd.DataFrame, code: int, label: str,
     return fig
 
 
-def build_destinations_figure(top: pd.DataFrame, label: str,
+def build_destinations_figure(top: pd.DataFrame, current_my: int, label: str,
                               color: str) -> go.Figure:
     fig = go.Figure()
     if top.empty:
@@ -197,7 +193,7 @@ def build_destinations_figure(top: pd.DataFrame, label: str,
         hovertemplate='%{y}: %{x:.2f} MMT shipped<extra></extra>',
     ))
     fig.update_layout(
-        title=f'{label} — Top 10 destinations (MY {CURRENT_MY})',
+        title=f'{label} — Top 10 destinations (MY {current_my})',
         barmode='overlay',
         template='plotly_white',
         height=380,
@@ -215,13 +211,19 @@ def build_summary_table(rows: List[Dict]) -> str:
     body = []
     for r in rows:
         pace = r['pace_pct']
-        cls = 'pace-up' if pace >= 0 else 'pace-dn'
+        if pace is None:
+            pace_cell = "<td class='pace-na'>n/a</td>"
+            avg_cell = "<td>n/a</td>"
+        else:
+            cls = 'pace-up' if pace >= 0 else 'pace-dn'
+            pace_cell = f"<td class='{cls}'>{pace:+.1f}%</td>"
+            avg_cell = f"<td>{r['avg_mt']/1e6:,.2f}</td>"
         body.append(
             f"<tr><td>{r['label']}</td>"
             f"<td>{r['latest_week']}</td>"
             f"<td>{r['current_mt']/1e6:,.2f}</td>"
-            f"<td>{r['avg_mt']/1e6:,.2f}</td>"
-            f"<td class='{cls}'>{pace:+.1f}%</td>"
+            f"{avg_cell}"
+            f"{pace_cell}"
             f"<td>{r['commitment_mt']/1e6:,.2f}</td></tr>"
         )
     return (
@@ -246,14 +248,15 @@ def main() -> int:
         hist = load_world_history(conn, code)
         if hist.empty:
             continue
-        top = load_top_countries(conn, code, CURRENT_MY)
+        current_my = int(hist['market_year'].max())
+        top = load_top_countries(conn, code, current_my)
         color = GROUP_COLORS[group]
-        metric = pace_metric(hist, code)
-        metric.update({'label': label, 'code': code})
+        metric = pace_metric(hist, current_my)
+        metric.update({'label': f'{label} (MY {current_my})', 'code': code})
         summary_rows.append(metric)
 
-        pace_fig = build_pace_figure(hist, code, label, color)
-        dest_fig = build_destinations_figure(top, label, color)
+        pace_fig = build_pace_figure(hist, current_my, label, color)
+        dest_fig = build_destinations_figure(top, current_my, label, color)
 
         sections.append(
             f"<section><h2>{label} <small>(code {code})</small></h2>"
@@ -284,6 +287,7 @@ def main() -> int:
       .summary td:first-child { text-align: left; font-weight: 600; }
       .pace-up { color: #15803d; font-weight: 600; }
       .pace-dn { color: #b91c1c; font-weight: 600; }
+      .pace-na { color: #888; font-weight: 600; }
       .meta { color: #666; font-size: 0.9em; }
     </style>
     """
@@ -291,13 +295,12 @@ def main() -> int:
     generated = datetime.now().strftime('%Y-%m-%d %H:%M')
     html = f"""<!DOCTYPE html>
 <html><head><meta charset='utf-8'>
-<title>US Grains Export Pace — MY {CURRENT_MY}</title>
+<title>US Grains Export Pace</title>
 {style}
 <script src='https://cdn.plot.ly/plotly-2.35.2.min.js'></script>
 </head><body>
 <h1>US Grains Export Pace</h1>
-<div class='meta'>Marketing Year {CURRENT_MY} &middot; generated {generated} &middot;
-data source: USDA ESR</div>
+<div class='meta'>generated {generated} &middot; data source: USDA ESR</div>
 <h2 style='margin-top:18px;border:0;'>Summary — pace vs 5-year average</h2>
 {summary_html}
 {''.join(sections)}
