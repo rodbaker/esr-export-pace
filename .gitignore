@@ -44,7 +44,7 @@ venv.bak/
 *.db
 *.sqlite
 *.sqlite3
-data/
+/data
 output/*.csv
 output/*.json
 
